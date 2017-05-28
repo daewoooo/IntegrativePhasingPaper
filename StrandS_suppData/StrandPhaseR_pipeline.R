@@ -1,7 +1,10 @@
 #!/usr/bin/Rscript
 
-require('StrandPhaseR')
-require('BSgenome.Hsapiens.UCSC.hg19')
+#add user defined path to load needed libraries
+.libPaths( c( .libPaths(), "/local/data/strand-seq/pipeline/revision") )
+
+suppressPackageStartupMessages(library(StrandPhaseR))
+suppressPackageStartupMessages(library(BSgenome.Hsapiens.UCSC.hg19))
 
 args=commandArgs(TRUE)
 
