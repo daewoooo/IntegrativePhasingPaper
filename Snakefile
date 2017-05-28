@@ -4,6 +4,7 @@ from os.path import splitext
 """
 Dependencies: samtools, picard, whatshap, and all these binaries in tools directory.
 whatshap branch: read_selection_fix
+StrandPhaseR: withr::with_libpaths(new = "tools/StrandPhaseR", install_git("git://github.com/daewoooo/StrandPhaseR.git", branch = "master"))
 """
 
 #tools
@@ -11,6 +12,8 @@ picard = 'tools/picard'
 samtools = 'tools/samtools'
 whatshap = 'tools/whatshap'
 reference = 'reference/human_g1k_v37.notation.fasta'
+# PATH to the directory where StrandPhaseR is installed
+strandphaser = 'tools/StrandPhaseR'
 
 # parameters
 coverage = [2,3,4,5,10,15,25,30]
@@ -47,7 +50,7 @@ rule run_SS_pipeline:
 		if wildcards.strandseqcoverage=='0':
 			shell('awk \'($0 ~ /^#/)\' {input[3]} > {output}')
 		else:
-			shell('Rscript download/StrandS_suppData/StrandPhaseR_pipeline.R {input[0]} StrandPhaseR_TRIAL_{wildcards.trials}_{wildcards.strandseqcoverage}cells {input[1]} download/StrandS_suppData/Platinum_NA12878_SNP_allChroms.txt {wildcards.chromosome} /local/data/strand-seq/pipeline/revision')
+			shell('Rscript download/StrandS_suppData/StrandPhaseR_pipeline.R {input[0]} StrandPhaseR_TRIAL_{wildcards.trials}_{wildcards.strandseqcoverage}cells {input[1]} download/StrandS_suppData/Platinum_NA12878_SNP_allChroms.txt {wildcards.chromosome} {strandphaser}')
 
 
 rule download_pacbio:
