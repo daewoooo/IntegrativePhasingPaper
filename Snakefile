@@ -39,7 +39,7 @@ rule create_dummy_file:
 	output:'download/StrandS_suppData/TRIAL{trials,[0-9]+}_downsampled/WCregions/NA12878_WC_regions_hg19_0cellsSample',
 	shell: 'touch {output}'
 
-
+#TODO: add rule to download SS BAMs
 rule run_SS_pipeline:
 	input: '../StrandS_BAMs', 'download/StrandS_suppData/TRIAL{trials,[0-9]+}_downsampled/WCregions/NA12878_WC_regions_hg19_{strandseqcoverage,[0-9]+}cellsSample', 'download/', 'vcf/NA12878.benchmark.unphased.chr{chromosome,[0-9]+}.vcf'
 	output:'StrandPhaseR_TRIAL_{trials,[0-9]+}_{strandseqcoverage,[0-9]+}cells/VCFfiles/chr{chromosome,[0-9]+}_phased.vcf', 
