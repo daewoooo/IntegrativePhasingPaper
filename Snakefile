@@ -37,13 +37,13 @@ rule create_dummy_file:
 
 #TODO: add rule to download SS BAMs
 rule run_SS_pipeline:
-	input: '../StrandS_BAMs', 'download/', 'vcf/NA12878.benchmark.unphased.chr{chromosome,[0-9]+}.vcf'
+	input: '../StrandS_BAMs', 'download/', 'vcf/NA12878.benchmark.unphased.chr{chromosome,[0-9]+}.vcf', '../StrandS_BAMs/NA12878_merged.bam'
 	output:'StrandPhaseR_TRIAL_{trials,[0-9]+}_{strandseqcoverage,[0-9]+}cells/VCFfiles/chr{chromosome,[0-9]+}_phased.vcf', 
 	run: 
 		if wildcards.strandseqcoverage=='0':
-			shell('awk \'($0 ~ /^#/)\' {input[3]} > {output}')
+			shell('awk \'($0 ~ /^#/)\' {input[2]} > {output}')
 		else:
-			shell('Rscript download/StrandS_suppData/StrandPhaseR_pipeline.R {input[0]} StrandPhaseR_TRIAL_{wildcards.trials}_{wildcards.strandseqcoverage}cells download/StrandS_suppData/TRIAL{wildcards.trials}_downsampled/WCregions/NA12878_WC_regions_hg19_{wildcards.strandseqcoverage}cellsSample download/StrandS_suppData/Platinum_NA12878_SNP_allChroms.txt {wildcards.chromosome} /local/data/strand-seq/pipeline/revision')
+			shell('Rscript download/StrandS_suppData/StrandPhaseR_pipeline.R {input[0]} StrandPhaseR_TRIAL_{wildcards.trials}_{wildcards.strandseqcoverage}cells download/StrandS_suppData/TRIAL{wildcards.trials}_downsampled/WCregions/NA12878_WC_regions_hg19_{wildcards.strandseqcoverage}cellsSample download/StrandS_suppData/Platinum_NA12878_SNP_allChroms.txt {wildcards.chromosome} {strandphaser} {input[3]}')
 
 
 rule download_pacbio:
