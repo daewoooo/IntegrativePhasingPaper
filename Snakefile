@@ -22,14 +22,7 @@ strandseqcoverage= [5,10,20,40,60,80,100,120,134]
 trials=[2,3,4,5,6]
 
 rule master:
-	input:
-		expand('vcf/NA12878.benchmark.unphased.chr{chromosome}.vcf', chromosome=chromosome), 
-		expand('download/')
-		expand('bam/TRIAL-{trials}/NA12878.{data}.chr{chromosome}.cov{coverage}.readgroup.sorted.bam', chromosome=chromosome, data=['pacbio', 'illumina','10xG'], coverage=coverage, trials=trials),
-		expand('whatshap_integrative_phasing/TRIAL-{trials}/strandseqcells{strandseqcoverage}.pacbio{pcoverage}.illumina0.10x0.chr{chromosome}.noindels.vcf', chromosome=chromosome, strandseqcoverage=strandseqcoverage, pcoverage=coverage, trials=trials),
-		expand('whatshap_integrative_phasing/TRIAL-{trials}/strandseqcells{strandseqcoverage}.pacbio{pcoverage}.illumina0.10x0.chr{chromosome}.indels.vcf', chromosome=chromosome, strandseqcoverage=strandseqcoverage, pcoverage=coverage, trials=trials),
-		expand('whatshap_integrative_phasing/TRIAL-{trials}/strandseqcells{strandseqcoverage}.pacbio0.illumina{icoverage}.10x0.chr{chromosome}.noindels.vcf',chromosome=chromosome, strandseqcoverage=strandseqcoverage, icoverage=coverage, trials=trials),
-
+	input: 'summary.eval'
 	message: 'MASTER rule'
 
 rule download_SS:
@@ -44,13 +37,13 @@ rule create_dummy_file:
 
 #TODO: add rule to download SS BAMs
 rule run_SS_pipeline:
-	input: '../StrandS_BAMs', 'download/StrandS_suppData/TRIAL{trials,[0-9]+}_downsampled/WCregions/NA12878_WC_regions_hg19_{strandseqcoverage,[0-9]+}cellsSample', 'download/', 'vcf/NA12878.benchmark.unphased.chr{chromosome,[0-9]+}.vcf'
+	input: '../StrandS_BAMs', 'download/', 'vcf/NA12878.benchmark.unphased.chr{chromosome,[0-9]+}.vcf'
 	output:'StrandPhaseR_TRIAL_{trials,[0-9]+}_{strandseqcoverage,[0-9]+}cells/VCFfiles/chr{chromosome,[0-9]+}_phased.vcf', 
 	run: 
 		if wildcards.strandseqcoverage=='0':
 			shell('awk \'($0 ~ /^#/)\' {input[3]} > {output}')
 		else:
-			shell('Rscript download/StrandS_suppData/StrandPhaseR_pipeline.R {input[0]} StrandPhaseR_TRIAL_{wildcards.trials}_{wildcards.strandseqcoverage}cells {input[1]} download/StrandS_suppData/Platinum_NA12878_SNP_allChroms.txt {wildcards.chromosome} {strandphaser}')
+			shell('Rscript download/StrandS_suppData/StrandPhaseR_pipeline.R {input[0]} StrandPhaseR_TRIAL_{wildcards.trials}_{wildcards.strandseqcoverage}cells download/StrandS_suppData/TRIAL{wildcards.trials}_downsampled/WCregions/NA12878_WC_regions_hg19_{wildcards.strandseqcoverage}cellsSample download/StrandS_suppData/Platinum_NA12878_SNP_allChroms.txt {wildcards.chromosome} /local/data/strand-seq/pipeline/revision')
 
 
 rule download_pacbio:
@@ -96,6 +89,12 @@ rule download_10xG:
 	shell:
 		"wget -O {output} https://s3-us-west-2.amazonaws.com/10x.files/samples/genome/NA12878_WGS_210/NA12878_WGS_210_phased_possorted_bam.{wildcards.ext}"
 
+rule download_10xG_vcf:
+	output: 
+		protected("download/NA12878.10xG.phased.chrall.vcf.gz")
+	shell:
+		"wget -O {output} https://s3-us-west-2.amazonaws.com/10x.files/samples/genome/NA12878_WGS_210/NA12878_WGS_210_phased_variants.vcf.gz"
+
 rule reheader_illumina:
 	input:'download/NA12878.illumina.chrall.bam', 'download/NA12878.illumina.chrall.bam.bai'
 	output: 'bam/NA12878.illumina.chrall.reheader.sam'
@@ -116,6 +115,7 @@ rule index_bams:
 	output: 'bam/NA12878.{data, (illumina|pacbio|10xG)}.chrall.bam.bai'
 	shell: 'samtools index {input}'
 
+#TODO: update the link
 rule consensus_VCFs:
 	threads: 100
 	output:
@@ -128,14 +128,19 @@ rule unzip_vcf:
 	output: 'vcf/NA12878.benchmark.phased.chrall.vcf'
 	shell: 'zcat {input} > {output}'
 
+rule filter_10xG_vcf:
+	input: 'download/NA12878.10xG.phased.chrall.vcf.gz',
+	output: 'vcf/NA12878.10xG.phased.chrall.vcf'
+	shell: 'zcat {input} | awk -vOFS=\'\\t\' \'($0 ~ /^#/) || (($7=".") && ($8="."))\' -  > {output}'
+
 rule unphase_vcfs:
-	input: 'vcf/NA12878.benchmark.phased.chrall.vcf',
-	output: 'vcf/NA12878.benchmark.unphased.chrall.vcf'
+	input: 'vcf/NA12878.{data,(benchmark|10xG)}.phased.chrall.vcf',
+	output: 'vcf/NA12878.{data,(benchmark|10xG)}.unphased.chrall.vcf'
 	shell: '{whatshap} unphase {input} > {output}'
 
 rule split_vcf:
-	input: 'vcf/NA12878.benchmark.{type,(unphased|phased)}.chrall.vcf'
-	output: 'vcf/NA12878.benchmark.{type,(unphased|phased)}.chr{chromosome,[0-9]+}.vcf'
+	input: 'vcf/NA12878.{data,(benchmark|10xG)}.{type,(unphased|phased)}.chrall.vcf'
+	output: 'vcf/NA12878.{data,(benchmark|10xG)}.{type,(unphased|phased)}.chr{chromosome,[0-9]+}.vcf'
 	message: 'Extracting chromosome {wildcards.chromosome} from {input}'
 	shell: """awk '/^#/ || ($1 == "chr{wildcards.chromosome}")' {input} > {output}"""
 
@@ -235,47 +240,58 @@ rule integrative_whatshap_illumina_SS:
 	message: 'Running WHATSHAP on {input.bam1}'
 	shell: '{whatshap} phase --max-coverage 15 --include-VCF-phasing --distrust-genotypes --sample NA12878 {input.vcf1} {input.vcf2} {input.bam1} --output {output.vcf} 2> {log}'
 
-# TODO: Check for SS only, pacbio only, illumina only and 10xG only.
-# Update 10xG rules after fixing whatshap for 10xG_phasing
 rule integrative_whatshap_pacbio_xg:
 	input: 
 		bam1='bam/TRIAL-{trials,[0-9]+}/NA12878.pacbio.chr{chromosome,[0-9]+}.cov{pcoverage,(all|[0-9]+)}.readgroup.sorted.bam',
 		vcf1='vcf/NA12878.benchmark.unphased.chr{chromosome,[0-9]+}.vcf',
-		bam2='bam/TRIAL-{trials,[0-9]+}/NA12878.10xG.chr{chromosome,[0-9]+}.cov{xcoverage,(all|[0-9]+)}.readgroup.sorted.bam',
+		vcf2='vcf/NA12878.10xG.phased.chr{chromosome,[0-9]+}.vcf',
 		ref=reference,
 	output: 
 		vcf= 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells0.pacbio{pcoverage,(all|[0-9]+)}.illumina0.10x{xcoverage,(all|[0-9]+)}.chr{chromosome,[0-9]+}.noindels.vcf',
 	log: 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells0.pacbio{pcoverage,(all|[0-9]+)}.illumina0.10x{xcoverage,(all|[0-9]+)}.chr{chromosome,[0-9]+}.noindels.vcf.log'
 	message: 'Running WHATSHAP on {input.bam1}'
-	shell: '{whatshap} phase --max-coverage 15 --distrust-genotypes --sample NA12878 --reference {input.ref} {input.vcf1} {input.bam2} {input.bam1} --output {output.vcf} 2> {log}'
+	shell: '{whatshap} phase --max-coverage 15 --include-VCF-phasing --distrust-genotypes --sample NA12878 --reference {input.ref} {input.vcf1} {input.vcf2} {input.bam1} --output {output.vcf} 2> {log}'
 
 rule integrative_whatshap_SS_xg:
 	input: 
-		bam1='bam/TRIAL-{trials,[0-9]+}/NA12878.10xG.chr{chromosome,[0-9]+}.cov{xcoverage,(all|[0-9]+)}.readgroup.sorted.bam',
+		vcf3='vcf/NA12878.10xG.phased.chr{chromosome,[0-9]+}.vcf',
 		vcf1='vcf/NA12878.benchmark.unphased.chr{chromosome,[0-9]+}.vcf',
 		vcf2='StrandPhaseR_TRIAL_{trials,[0-9]+}_{strandseqcoverage,[0-9]+}cells/VCFfiles/chr{chromosome,[0-9]+}_phased.vcf',
 	output: 
 		vcf= 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio0.illumina0.10x{xcoverage,(all|[0-9]+)}.chr{chromosome,[0-9]+}.noindels.vcf',
 	log: 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio0.illumina0.10x{xcoverage,(all|[0-9]+)}.chr{chromosome,[0-9]+}.noindels.vcf.log'
 	message: 'Running WHATSHAP on {input.bam1}'
-	shell: '{whatshap} phase --max-coverage 15 --include-VCF-phasing --distrust-genotypes --sample NA12878 {input.vcf1} {input.vcf2} {input.bam1} --output {output.vcf} 2> {log}'
-
-
+	shell: '{whatshap} phase --max-coverage 15 --include-VCF-phasing --distrust-genotypes --sample NA12878 {input.vcf1} {input.vcf2} {input.vcf3} --output {output.vcf} 2> {log}'
 
 rule evaluate_whatshap:
 	input:
 		truth='vcf/NA12878.benchmark.phased.chr{chromosome,[0-9]+}.vcf',
-		phased='whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio{pcoverage,(all|[0-9]+)}.illumina{icoverage,(all|[0-9]+)}.10x{xcoverage,(all|[0-9]+)}.chr{chromosome,[0-9]+}.vcf',
-	output:	'eval/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio{pcoverage,(all|[0-9]+)}.illumina{icoverage,(all|[0-9]+)}.10x{xcoverage,(all|[0-9]+)}.chr{chromosome,[0-9]+}.eval',
-	log: 'eval/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio{pcoverage,(all|[0-9]+)}.illumina{icoverage,(all|[0-9]+)}.10x{xcoverage,(all|[0-9]+)}.chr{chromosome,[0-9]+}.log',
+		phased='whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio{pcoverage,(all|[0-9]+)}.illumina{icoverage,(all|[0-9]+)}.10x{xcoverage,(all|[0-9]+)}.chr{chromosome,[0-9]+}.noindels.vcf',
+	output:	'eval/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio{pcoverage,(all|[0-9]+)}.illumina{icoverage,(all|[0-9]+)}.10x{xcoverage,(all|[0-9]+)}.chr{chromosome,[0-9]+}.noindels.eval',
+	log: 'eval/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio{pcoverage,(all|[0-9]+)}.illumina{icoverage,(all|[0-9]+)}.10x{xcoverage,(all|[0-9]+)}.chr{chromosome,[0-9]+}.noindels.log',
 	shell: '{whatshap} compare --names benchmark,whatshap --tsv-pairwise {output} --only-snvs {input.truth} {input.phased} |& tee {log}'
 
-rule stats_whatshap:
+rule evaluate_whatshap_indels:
 	input:
 		truth='vcf/NA12878.benchmark.phased.chr{chromosome,[0-9]+}.vcf',
-		phased='whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio{pcoverage,(all|[0-9]+)}.illumina{icoverage,(all|[0-9]+)}.10x{xcoverage,(all|[0-9]+)}.chr{chromosome,[0-9]+}.vcf',
-	output:	'eval/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio{pcoverage,(all|[0-9]+)}.illumina{icoverage,(all|[0-9]+)}.10x{xcoverage,(all|[0-9]+)}.chr{chromosome,[0-9]+}.stats'
-	log: 'eval/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio{pcoverage,(all|[0-9]+)}.illumina{icoverage,(all|[0-9]+)}.10x{xcoverage,(all|[0-9]+)}.chr{chromosome,[0-9]+}.stats.log',
-	shell: '{whatshap} stats --sample NA12878 --only-snvs --tsv {output[0]} {input.phased} |& tee {log}'
+		phased='whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio{pcoverage,(all|[0-9]+)}.illumina0.10x0.chr{chromosome,[0-9]+}.indels.vcf',
+	output:	'eval/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio{pcoverage,(all|[0-9]+)}.illumina{icoverage,(all|[0-9]+)}.10x{xcoverage,(all|[0-9]+)}.chr{chromosome,[0-9]+}.indels.eval',
+	log: 'eval/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio{pcoverage,(all|[0-9]+)}.illumina{icoverage,(all|[0-9]+)}.10x{xcoverage,(all|[0-9]+)}.chr{chromosome,[0-9]+}.indels.log',
+	shell: '{whatshap} compare --names benchmark,whatshap --tsv-pairwise {output} {input.truth} {input.phased} |& tee {log}'
 
-
+rule summary:
+	output:'summary.eval',
+	input:
+		expand('download/')
+		expand('eval/TRIAL-{trials}/strandseqcells{strandseqcoverage}.pacbio{pcoverage}.illumina0.10x0.chr{chromosome}.noindels.eval', chromosome=chromosome, strandseqcoverage=strandseqcoverage, pcoverage=coverage, trials=trials),
+		expand('eval/TRIAL-{trials}/strandseqcells{strandseqcoverage}.pacbio{pcoverage}.illumina0.10x0.chr{chromosome}.indels.eval', chromosome=chromosome, strandseqcoverage=strandseqcoverage, pcoverage=coverage, trials=trials),
+		expand('eval/TRIAL-{trials}/strandseqcells{strandseqcoverage}.pacbio0.illumina{icoverage}.10x0.chr{chromosome}.noindels.eval',chromosome=chromosome, strandseqcoverage=strandseqcoverage, icoverage=coverage, trials=trials),
+		expand('eval/TRIAL-{trials}/strandseqcells{strandseqcoverage}.pacbio0.illumina0.10x{xcoverage}.chr{chromosome}.noindels.eval',chromosome=chromosome, strandseqcoverage=strandseqcoverage, xcoverage=coverage, trials=trials),
+		expand('eval/TRIAL-{trials}/strandseqcells0.pacbio{pcoverage}.illumina0.10x{xcoverage}.chr{chromosome}.noindels.eval',chromosome=chromosome, xcoverage=coverage, pcoverage=coverage, trials=trials),
+		expand('eval/TRIAL-{trials}/strandseqcells0.pacbio0.illumina{icoverage}.10x0.chr{chromosome}.noindels.eval', chromosome=chromosome, icoverage=coverage, trials=trials),
+		expand('eval/TRIAL-{trials}/strandseqcells{strandseqcoverage}.pacbio{pcoverage}.illumina0.10x0.chr{chromosome}.indels.eval', chromosome=chromosome, strandseqcoverage=strandseqcoverage, pcoverage=coverage, trials=trials )
+	message: 'Aggregating statistics to {output}'
+	run:
+		first = input[0]
+		rest = ' '.join(input[1:]) 
+		shell('(cat {first} && ( cat {rest} | grep -v \'^#\' ) ) > {output}')
