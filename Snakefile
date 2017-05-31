@@ -16,7 +16,7 @@ reference = 'reference/human_g1k_v37.notation.fasta'
 strandphaser = 'tools/StrandPhaseR'
 
 # parameters
-coverage = [2,3,4,5,10,15,25,30]
+coverage = [2,3,4,5,10,15,25,30,'all']
 chromosome = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22]
 strandseqcoverage= [5,10,20,40,60,80,100,120,134]
 trials=[2,3,4,5,6]
@@ -298,19 +298,38 @@ rule evaluate_whatshap_indels:
 	log: 'eval/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio{pcoverage,(all|[0-9]+)}.illumina{icoverage,(all|[0-9]+)}.10x{xcoverage,(all|[0-9]+)}.chr{chromosome,[0-9]+}.indels.log',
 	shell: '{whatshap} compare --names benchmark,whatshap --tsv-pairwise {output} {input.truth} {input.phased} |& tee {log}'
 
+rule evaluate_whatshap_10xg_only:
+	input:
+		truth='vcf/NA12878.benchmark.phased.chr{chromosome,[0-9]+}.vcf',
+		phased='vcf/NA12878.10xG.phased.chr{chromosome,[0-9]+}.vcf',
+	output:	'eval/whatshap_10xG_only/TRIAL-{trials,[0-9]+}/strandseqcells0.pacbio0.illumina0.10xall.chr{chromosome,[0-9]+}.noindels.eval',
+	log: 'eval/whatshap_10xG_only/TRIAL-{trials,[0-9]+}/strandseqcells0.pacbio0.illumina0.10xall.chr{chromosome,[0-9]+}.noindels.log',
+	shell: '{whatshap_cmp} compare --names benchmark,whatshap --only-snvs --tsv-pairwise {output} {input.truth} {input.phased} |& tee {log}'
+
+
+rule evaluate_whatshap_SS_only:
+	input:
+		truth='vcf/NA12878.benchmark.phased.chr{chromosome,[0-9]+}.vcf',
+		phased='StrandPhaseR_TRIAL_{trials,[0-9]+}_{strandseqcoverage,[0-9]+}cells/VCFfiles/chr{chromosome,[0-9]+}_phased.vcf',
+	output:	'eval/whatshap_SS_only/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio0.illumina0.10x0.chr{chromosome,[0-9]+}.noindels.eval',
+	log: 'eval/whatshap_SS_only/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio0.illumina0.10x0.chr{chromosome,[0-9]+}.noindels.log',
+	shell: '{whatshap_cmp} compare --names benchmark,whatshap --only-snvs --tsv-pairwise {output} {input.truth} {input.phased} |& tee {log}'
+
 rule summary:
 	output:'summary.eval',
 	input:
 		expand('eval/TRIAL-{trials}/strandseqcells{strandseqcoverage}.pacbio{pcoverage}.illumina0.10x0.chr{chromosome}.noindels.eval', chromosome=chromosome, strandseqcoverage=strandseqcoverage, pcoverage=coverage, trials=trials),
 		expand('eval/TRIAL-{trials}/strandseqcells{strandseqcoverage}.pacbio{pcoverage}.illumina0.10x0.chr{chromosome}.indels.eval', chromosome=chromosome, strandseqcoverage=strandseqcoverage, pcoverage=coverage, trials=trials),
 		expand('eval/TRIAL-{trials}/strandseqcells{strandseqcoverage}.pacbio0.illumina{icoverage}.10x0.chr{chromosome}.noindels.eval',chromosome=chromosome, strandseqcoverage=strandseqcoverage, icoverage=coverage, trials=trials),
-		expand('eval/TRIAL-{trials}/strandseqcells{strandseqcoverage}.pacbio0.illumina0.10x{xcoverage}.chr{chromosome}.noindels.eval',chromosome=chromosome, strandseqcoverage=strandseqcoverage, xcoverage=coverage, trials=trials),
-		expand('eval/TRIAL-{trials}/strandseqcells0.pacbio{pcoverage}.illumina0.10x{xcoverage}.chr{chromosome}.noindels.eval',chromosome=chromosome, xcoverage=coverage, pcoverage=coverage, trials=trials),
+		expand('eval/TRIAL-{trials}/strandseqcells{strandseqcoverage}.pacbio0.illumina0.10x{xcoverage}.chr{chromosome}.noindels.eval',chromosome=chromosome, strandseqcoverage=strandseqcoverage, xcoverage=['all'], trials=trials),
+		expand('eval/TRIAL-{trials}/strandseqcells0.pacbio{pcoverage}.illumina0.10x{xcoverage}.chr{chromosome}.noindels.eval',chromosome=chromosome, xcoverage=['all'], pcoverage=coverage, trials=trials),
 		expand('eval/TRIAL-{trials}/strandseqcells0.pacbio0.illumina{icoverage}.10x0.chr{chromosome}.noindels.eval', chromosome=chromosome, icoverage=coverage, trials=trials),
 		expand('eval/TRIAL-{trials}/strandseqcells{strandseqcoverage}.pacbio{pcoverage}.illumina0.10x0.chr{chromosome}.indels.eval', chromosome=chromosome, strandseqcoverage=strandseqcoverage, pcoverage=coverage, trials=trials),
 		expand('eval/whatshap_pacbio_only/TRIAL-{trials}/strandseqcells0.pacbio{pcoverage}.illumina0.10x0.chr{chromosome}.noindels.eval', chromosome=chromosome, pcoverage=coverage, trials=trials),
 		expand('eval/TRIAL-{trials}/strandseqcells0.pacbio{pcoverage}.illumina0.10x0.chr{chromosome}.indels.eval', chromosome=chromosome, pcoverage=coverage, trials=trials),
 		expand('eval/TRIAL-{trials}/strandseqcells0.pacbio0.illumina{icoverage}.10x0.chr{chromosome}.noindels.eval',chromosome=chromosome, icoverage=coverage, trials=trials),
+		expand('eval/whatshap_10xG_only/TRIAL-{trials}/strandseqcells0.pacbio0.illumina0.10xall.chr{chromosome}.noindels.eval', chromosome=chromosome, trials=trials),
+		expand('eval/whatshap_SS_only/TRIAL-{trials}/strandseqcells{strandseqcoverage}.pacbio0.illumina0.10x0.chr{chromosome}.noindels.eval', chromosome=chromosome, trials=trials, strandseqcoverage=strandseqcoverage)
 	message: 'Aggregating statistics to {output}'
 	run:
 		first = input[0]
