@@ -315,6 +315,160 @@ rule evaluate_whatshap_SS_only:
 	log: 'eval/whatshap_SS_only/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio0.illumina0.10x0.chr{chromosome,[0-9]+}.noindels.log',
 	shell: '{whatshap_cmp} compare --names benchmark,whatshap --only-snvs --tsv-pairwise {output} {input.truth} {input.phased} |& tee {log}'
 
+# Added rules from Tobias Snakefile
+rule download_bam:
+	output: 'bam/{sample}.bam'
+	log: 'bam/{sample}.wgetlog'
+	resources: download=1
+	shell: 'wget --output-file={log} -O {output} ftp://ftp.sra.ebi.ac.uk/vol1/ERA172/ERA172924/bam/{wildcards.sample}_S1.bam'
+		
+
+rule download_giab_vcf:
+	input: 'names/NA12878.txt'
+	output: 'vcf/giab/NA12878.vcf.gz'
+	log: 'vcf/giab/NA12878.vcf.gz.wgetlog'
+	resources: download=1
+	shell: 'wget --output-file={log} -O - ftp://ftp-trace.ncbi.nlm.nih.gov/giab/ftp/release/NA12878_HG001/NISTv3.3.2/GRCh37/HG001_GRCh37_GIAB_highconf_CG-IllFB-IllGATKHC-Ion-10X-SOLID_CHROM1-X_v.3.3.2_highconf_PGandRTGphasetransfer.vcf.gz | bcftools reheader -s {input} > {output}'
+
+rule download_platinum_vcf:
+	output: 'vcf/platinum/NA12878.vcf.gz'
+	log: 'vcf/platinum/NA12878.vcf.gz.wgetlog'
+	resources: download=1
+	shell: 'wget --output-file={log} --password "" -O {output} ftp://platgene_ro@ussd-ftp.illumina.com/2016-1.0/hg19/small_variants/NA12878/NA12878.vcf.gz'
+
+rule vcf_sitesonly:
+	input: 
+		vcf='vcf/{what}/{sample}.vcf.gz',
+		tbi='vcf/{what}/{sample}.vcf.gz.tbi',
+	output:
+		vcf='vcf-sitesonly/{what}/{sample}.{chromosome}.vcf.gz'
+	log: 'vcf-sitesonly/{what}/{sample}.{chromosome}.log'
+	shell: 'bcftools view -r {wildcards.chromosome} -G {input.vcf} | bgzip > {output.vcf}'
+
+rule sample_name:
+	output: 'names/{sample}.txt'
+	shell: 'echo {wildcards.sample} > {output}'
+
+rule compare_giab_platinum:
+	input:
+		platinum='vcf/platinum/{sample}.vcf.gz',
+		giab='vcf/giab/{sample}.vcf.gz',
+	output: 'comparison/giab-platinum.{sample}.txt'
+	log: 'comparison/giab-platinum.{sample}.log'
+	shell: './compare-vcfs.py --names GIAB,PLATINUM {wildcards.sample} {input.giab} {input.platinum} > {output} 2> {log}'
+
+rule compare_platinum_freebayes:
+	input:
+		platinum='vcf/platinum/{sample}.vcf.gz',
+		freebayes='freebayes-retype-merged/all-filtered.vcf.gz',
+	output: 'comparison/platinum-freebayes.{sample}.txt'
+	log: 'comparison/platinum-freebayes.{sample}.log'
+	shell: './compare-vcfs.py --names PLATINUM,FREEBAYES {wildcards.sample} {input.platinum} {input.freebayes} > {output} 2> {log}'
+
+rule index_bam:
+	input: 
+		bam='{file}.bam'
+	output:
+		bai='{file}.bam.bai'
+	shell:
+		'samtools index {input.bam}'
+
+rule bgzip:
+	input: '{file}.vcf'
+	output: '{file}.vcf.gz'
+	shell: 'bgzip -c {input} > {output}'
+
+rule tabix:
+	input: '{file}.vcf.gz'
+	output: '{file}.vcf.gz.tbi'
+	shell: 'tabix {input}'
+			
+rule freebayes_genotype:
+	input:
+		vcf='vcf-sitesonly/platinum/NA12878.{chromosome}.vcf.gz',
+		vcfidx='vcf-sitesonly/platinum/NA12878.{chromosome}.vcf.gz.tbi',
+		bams=expand('bam/{sample}.bam', sample=samples),
+		bais=expand('bam/{sample}.bam.bai', sample=samples),
+	output:
+		vcf='freebayes-retype/{chromosome}.vcf.gz'
+	log: 'freebayes-retype/{chromosome}.log'
+	shell:
+		'(time samtools merge -R {wildcards.chromosome} - {input.bams} |  freebayes -f {ref} --haplotype-basis-alleles {input.vcf} -@ {input.vcf} --stdin | bgzip > {output.vcf} ) 2> {log}'
+
+rule merge_freebayes:
+	input:
+		vcfs=expand('freebayes-retype/{chromosome}.vcf.gz', chromosome=chromosomes),
+		vcfidx=expand('freebayes-retype/{chromosome}.vcf.gz.tbi', chromosome=chromosomes),
+	output:
+		'freebayes-retype-merged/all.vcf.gz'
+	log:
+		'freebayes-retype-merged/all.vcf.gz.log'
+	shell:
+		'(bcftools concat {input.vcfs} | vcf-sort | bgzip > {output}) 2> {log}'
+
+rule filter_freebayes_vcf:
+	input:
+		vcf='freebayes-retype-merged/all.vcf.gz'
+	output:
+		vcf='freebayes-retype-merged/all-filtered.vcf.gz'
+	shell:
+		'zcat {input.vcf} | awk \'($0 ~ /^#/) || (($6 != ".") && ($6 >= 30))\' | bgzip > {output.vcf}'
+
+rule create_ped:
+	output: 'ped/family.ped'
+	shell: 'echo "FAM1 NA12878 NA12891 NA12892 0 1" > {output}'
+rule whatshap_trio_pure_genetic:
+	input:
+		vcf='freebayes-retype-merged/all-filtered.vcf.gz',
+		ped='ped/family.ped',
+	output:
+		vcf='whatshap/trio-pure-genetic-phasing.vcf.gz',
+	log: 'whatshap/trio-pure-genetic-phasing.log'
+	shell: '({whatshap} phase --chromosome chr1 --ped {input.ped} {input.vcf} | bgzip > {output.vcf}) 2> {log}'
+
+# Some hard-coded wildcards to restrict the analysis.
+rule whatshap_trio_pure_genetic:
+	input:
+		vcf='freebayes-retype-merged/all-filtered.vcf.gz',
+		ped='ped/family.ped',
+	output:
+		vcf='whatshap/trio-pure-genetic-phasing.vcf.gz',
+	log: 'whatshap/trio-pure-genetic-phasing.log'
+	shell: '({whatshap} phase --chromosome chr1 --ped {input.ped} {input.vcf} | bgzip > {output.vcf}) 2> {log}'
+
+rule whatshap_trio:
+	input:
+		vcf='freebayes-retype-merged/all-filtered.vcf.gz',
+		ped='ped/family.ped',
+		bam = 'bam/TRIAL-3/NA12878.pacbio.chr1.covall.readgroup.sorted.bam'
+	output:
+		vcf='whatshap/trio-phasing.vcf.gz',
+	log: 'whatshap/trio-phasing.log'
+	shell: '({whatshap} phase --chromosome chr1 --max-coverage 45 --ped {input.ped} {input.vcf} {input.bam}| bgzip > {output.vcf}) 2> {log}'
+
+
+rule extract_child:
+	input: 'whatshap/trio-phasing.vcf.gz', 'whatshap/trio-pure-genetic-phasing.vcf.gz'
+	output: 'whatshap/trio-phasing.child.vcf', 'whatshap/trio-pure-genetic-phasing.child.vcf'
+	shell: 'vcf-subset -c NA12878 {input[0]} > {output[0]} && vcf-subset -c NA12878 {input[1]} > {output[1]}'
+
+rule eval_whatshap_trio:
+	input:
+		truth='vcf/NA12878.benchmark.phased.chr1.vcf',
+		phased='whatshap/trio-phasing.child.vcf',
+	output:	'eval/whatshap/trio-phasing.child.eval',
+	log: 'eval/whatshap/trio-phasing.child.log',
+	shell: '{whatshap} compare --names benchmark,whatshap --only-snvs --tsv-pairwise {output} {input.truth} {input.phased} |& tee {log}'
+
+rule eval_whatshap_trio_pure_genetic:
+	input:
+		truth='vcf/NA12878.benchmark.phased.chr1.vcf',
+		phased='whatshap/trio-pure-genetic-phasing.child.vcf',
+	output:	'eval/whatshap/whatshap/trio-pure-genetic-phasing.child.eval',
+	log: 'eval/whatshap/whatshap/trio-pure-genetic-phasing.child.log',
+	shell: '{whatshap} compare --names benchmark,whatshap --only-snvs --tsv-pairwise {output} {input.truth} {input.phased} |& tee {log}'
+	
+
 rule summary:
 	output:'summary.eval',
 	input:
@@ -329,7 +483,9 @@ rule summary:
 		expand('eval/TRIAL-{trials}/strandseqcells0.pacbio{pcoverage}.illumina0.10x0.chr{chromosome}.indels.eval', chromosome=chromosome, pcoverage=coverage, trials=trials),
 		expand('eval/TRIAL-{trials}/strandseqcells0.pacbio0.illumina{icoverage}.10x0.chr{chromosome}.noindels.eval',chromosome=chromosome, icoverage=coverage, trials=trials),
 		expand('eval/whatshap_10xG_only/TRIAL-{trials}/strandseqcells0.pacbio0.illumina0.10xall.chr{chromosome}.noindels.eval', chromosome=chromosome, trials=trials),
-		expand('eval/whatshap_SS_only/TRIAL-{trials}/strandseqcells{strandseqcoverage}.pacbio0.illumina0.10x0.chr{chromosome}.noindels.eval', chromosome=chromosome, trials=trials, strandseqcoverage=strandseqcoverage)
+		expand('eval/whatshap_SS_only/TRIAL-{trials}/strandseqcells{strandseqcoverage}.pacbio0.illumina0.10x0.chr{chromosome}.noindels.eval', chromosome=chromosome, trials=trials, strandseqcoverage=strandseqcoverage),
+		expand('eval/whatshap/whatshap/trio-pure-genetic-phasing.child.eval'),
+		expand('eval/whatshap/trio-phasing.child.eval')
 	message: 'Aggregating statistics to {output}'
 	run:
 		first = input[0]
