@@ -226,7 +226,7 @@ rule integrative_whatshap_pacbio_SS_indels:
 		vcf= 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio{pcoverage,(all|[0-9]+)}.illumina0.10x0.chr{chromosome,[0-9]+}.indels.vcf',
 	log: 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio{pcoverage,(all|[0-9]+)}.illumina0.10x0.chr{chromosome,[0-9]+}.indels.vcf.log'
 	message: 'Running WHATSHAP on {input.bam1}'
-	shell: '{whatshap} phase --max-coverage 15 --include-VCF-phasing --distrust-genotypes --indels --sample NA12878 --reference {input.ref} {input.vcf1} {input.vcf2} {input.bam1} --output {output.vcf} 2> {log}'
+	shell: '{whatshap} phase --max-coverage 15 --include-VCF-phasing --indels --sample NA12878 --reference {input.ref} {input.vcf1} {input.vcf2} {input.bam1} --output {output.vcf} 2> {log}'
 
 rule integrative_whatshap_illumina_SS:
 	input: 
