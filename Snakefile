@@ -214,7 +214,7 @@ rule integrative_whatshap_pacbio_SS:
 		vcf= 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio{pcoverage,(all|[0-9]+)}.illumina0.10x0.chr{chromosome,[0-9]+}.noindels.vcf',
 	log: 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio{pcoverage,(all|[0-9]+)}.illumina0.10x0.chr{chromosome,[0-9]+}.noindels.vcf.log'
 	message: 'Running WHATSHAP on {input.bam1}'
-	shell: '{whatshap} phase --max-coverage 15 --include-VCF-phasing --distrust-genotypes --sample NA12878 --reference {input.ref} {input.vcf1} {input.vcf2} {input.bam1} --output {output.vcf} 2> {log}'
+	shell: '{whatshap} phase --max-coverage 15 --include-VCF-phasing 1 --distrust-genotypes --sample NA12878 --reference {input.ref} {input.vcf1} {input.vcf2} {input.bam1} --output {output.vcf} 2> {log}'
 
 rule integrative_whatshap_pacbio_SS_indels:
 	input: 
@@ -226,7 +226,7 @@ rule integrative_whatshap_pacbio_SS_indels:
 		vcf= 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio{pcoverage,(all|[0-9]+)}.illumina0.10x0.chr{chromosome,[0-9]+}.indels.vcf',
 	log: 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio{pcoverage,(all|[0-9]+)}.illumina0.10x0.chr{chromosome,[0-9]+}.indels.vcf.log'
 	message: 'Running WHATSHAP on {input.bam1}'
-	shell: '{whatshap} phase --max-coverage 15 --include-VCF-phasing --indels --sample NA12878 --reference {input.ref} {input.vcf1} {input.vcf2} {input.bam1} --output {output.vcf} 2> {log}'
+	shell: '{whatshap} phase --max-coverage 15 --include-VCF-phasing 1 --indels --sample NA12878 --reference {input.ref} {input.vcf1} {input.vcf2} {input.bam1} --output {output.vcf} 2> {log}'
 
 rule integrative_whatshap_illumina_SS:
 	input: 
@@ -238,7 +238,7 @@ rule integrative_whatshap_illumina_SS:
 		vcf= 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio0.illumina{icoverage,(all|[0-9]+)}.10x0.chr{chromosome,[0-9]+}.noindels.vcf',
 	log: 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio0.illumina{icoverage,(all|[0-9]+)}.10x0.chr{chromosome,[0-9]+}.noindels.vcf.log'
 	message: 'Running WHATSHAP on {input.bam1}'
-	shell: '{whatshap} phase --max-coverage 15 --include-VCF-phasing --distrust-genotypes --sample NA12878 {input.vcf1} {input.vcf2} {input.bam1} --output {output.vcf} 2> {log}'
+	shell: '{whatshap} phase --max-coverage 15 --include-VCF-phasing 1 --distrust-genotypes --sample NA12878 {input.vcf1} {input.vcf2} {input.bam1} --output {output.vcf} 2> {log}'
 
 rule integrative_whatshap_pacbio_xg:
 	input: 
@@ -250,7 +250,7 @@ rule integrative_whatshap_pacbio_xg:
 		vcf= 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells0.pacbio{pcoverage,(all|[0-9]+)}.illumina0.10x{xcoverage,(all|[0-9]+)}.chr{chromosome,[0-9]+}.noindels.vcf',
 	log: 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells0.pacbio{pcoverage,(all|[0-9]+)}.illumina0.10x{xcoverage,(all|[0-9]+)}.chr{chromosome,[0-9]+}.noindels.vcf.log'
 	message: 'Running WHATSHAP on {input.bam1}'
-	shell: '{whatshap} phase --max-coverage 15 --include-VCF-phasing --distrust-genotypes --sample NA12878 --reference {input.ref} {input.vcf1} {input.vcf2} {input.bam1} --output {output.vcf} 2> {log}'
+	shell: '{whatshap} phase --max-coverage 15 --include-VCF-phasing 1 --distrust-genotypes --sample NA12878 --reference {input.ref} {input.vcf1} {input.vcf2} {input.bam1} --output {output.vcf} 2> {log}'
 
 rule integrative_whatshap_pacbio_only:
 	input: 
@@ -279,8 +279,7 @@ rule integrative_whatshap_SS_xg:
 	output: 
 		vcf= 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio0.illumina0.10x{xcoverage,(all|[0-9]+)}.chr{chromosome,[0-9]+}.noindels.vcf',
 	log: 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio0.illumina0.10x{xcoverage,(all|[0-9]+)}.chr{chromosome,[0-9]+}.noindels.vcf.log'
-	message: 'Running WHATSHAP on {input.bam1}'
-	shell: '{whatshap} phase --max-coverage 15 --include-VCF-phasing --distrust-genotypes --sample NA12878 {input.vcf1} {input.vcf2} {input.vcf3} --output {output.vcf} 2> {log}'
+	shell: '{whatshap} phase --max-coverage 15 --include-VCF-phasing 0 --distrust-genotypes --sample NA12878 {input.vcf1} {input.vcf2} {input.vcf3} --output {output.vcf} 2> {log}'
 
 rule evaluate_whatshap:
 	input:
