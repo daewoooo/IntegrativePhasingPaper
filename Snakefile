@@ -2,7 +2,9 @@ import pysam
 from os.path import splitext
 
 """
-R shell command to install StrandPhaseR: withr::with_libpaths(new = ".", install_git("git://github.com/daewoooo/StrandPhaseR.git", branch = "master"))
+R shell command to install StrandPhaseR: 
+> library(devtools)
+> withr::with_libpaths(new = "~/", install_git("git://github.com/daewoooo/StrandPhaseR.git", branch = "master"))
 Download Strand-Seq BAMs in the folder StrandS_BAMs using link: https://zenodo.org/record/583682#.WVusQPF95hG
 
 # Install Miniconda
@@ -27,7 +29,7 @@ whatshap = 'whatshap'
 bcftools = 'bcftools'
 reference = 'reference/human_g1k_v37.notation.fasta'
 # PATH to the directory where StrandPhaseR is installed
-strandphaser = 'StrandPhaseR'
+strandphaser = '~/'
 
 # parameters
 coverage = [2,3,4,5,10,15,25,30,'all']
