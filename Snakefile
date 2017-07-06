@@ -2,9 +2,8 @@ import pysam
 from os.path import splitext
 
 """
-Dependencies: samtools, picard, whatshap, bcftools, vcftools 
-whatshap branch: read_selection_fix
-R shell to StrandPhaseR: withr::with_libpaths(new = "tools/StrandPhaseR", install_git("git://github.com/daewoooo/StrandPhaseR.git", branch = "master"))
+R shell command to install StrandPhaseR: withr::with_libpaths(new = ".", install_git("git://github.com/daewoooo/StrandPhaseR.git", branch = "master"))
+Download Strand-Seq BAMs in the folder StrandS_BAMs using link: https://zenodo.org/record/583682#.WVusQPF95hG
 
 # Install Miniconda
 RUN echo 'export PATH=/opt/miniconda/bin:$PATH' > /etc/profile.d/conda.sh && \
@@ -14,12 +13,11 @@ RUN echo 'export PATH=/opt/miniconda/bin:$PATH' > /etc/profile.d/conda.sh && \
 ENV PATH /opt/miniconda/bin:$PATH
 RUN conda config --add channels bioconda --add channels r --add channels conda-forge
 
+#TODO: update whatshap version
 # Install all dependencies available as conda packages
 RUN conda install -y python=3.5.2 snakemake=3.7.1 samtools=1.2 picard=1.126 \
         vcftools=0.1.14 bwa=0.7.12 whatshap=0.13 \
         biopython=1.68 htslib=1.4 bcftools=1.5
-
-# Download Strand-Seq BAMs in the folder StrandS_BAMs using link: https://zenodo.org/record/583682#.WVusQPF95hG
 """
 
 #tools
@@ -29,7 +27,7 @@ whatshap = 'whatshap'
 bcftools = 'bcftools'
 reference = 'reference/human_g1k_v37.notation.fasta'
 # PATH to the directory where StrandPhaseR is installed
-strandphaser = 'tools/StrandPhaseR'
+strandphaser = 'StrandPhaseR'
 
 # parameters
 coverage = [2,3,4,5,10,15,25,30,'all']
