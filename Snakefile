@@ -2,9 +2,9 @@ import pysam
 from os.path import splitext
 
 """
-Dependencies: samtools, picard, whatshap 
+Dependencies: samtools, picard, whatshap, bcftools, vcftools 
 whatshap branch: read_selection_fix
-StrandPhaseR: withr::with_libpaths(new = "tools/StrandPhaseR", install_git("git://github.com/daewoooo/StrandPhaseR.git", branch = "master"))
+R shell to StrandPhaseR: withr::with_libpaths(new = "tools/StrandPhaseR", install_git("git://github.com/daewoooo/StrandPhaseR.git", branch = "master"))
 
 # Install Miniconda
 RUN echo 'export PATH=/opt/miniconda/bin:$PATH' > /etc/profile.d/conda.sh && \
@@ -19,7 +19,7 @@ RUN conda install -y python=3.5.2 snakemake=3.7.1 samtools=1.2 picard=1.126 \
         vcftools=0.1.14 bwa=0.7.12 whatshap=0.13 \
         biopython=1.68 htslib=1.4 bcftools=1.5
 
-# Install Strand-Seq BAMs in the folder StrandS_BAMs using link: https://zenodo.org/record/583682#.WVusQPF95hG
+# Download Strand-Seq BAMs in the folder StrandS_BAMs using link: https://zenodo.org/record/583682#.WVusQPF95hG
 """
 
 #tools
@@ -122,7 +122,6 @@ rule index_bams:
 	output: 'bam/NA12878.{data, (illumina|pacbio|10xG)}.chrall.covall.bam.bai'
 	shell: 'samtools index {input}'
 
-#TODO: update the link
 rule consensus_VCFs:
 	threads: 100
 	output:
@@ -141,7 +140,7 @@ rule filter_10xG_vcf:
 	shell: 'zcat {input} | awk -vOFS=\'\\t\' \'($0 ~ /^#/) || (($7=".") && ($8="."))\' -  > {output}'
 
 rule unphase_vcfs:
-	input: 'vcf/NA12878.{data}.phased.chrall.vcf',',
+	input: 'vcf/NA12878.{data}.phased.chrall.vcf',
 	output: expand('vcf/NA12878.{data}.unphased.chrall.vcf', data=['benchamrk', '10xG'])
 	shell: '{whatshap} unphase {input} > {output}'
 
