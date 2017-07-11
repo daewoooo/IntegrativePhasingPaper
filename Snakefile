@@ -45,9 +45,18 @@ rule master:
 	message: 'MASTER rule'
 
 rule download_strandseq_bams:
-	output: 'StrandS_BAMs/{file}.bam'
+	output: 'StrandS_BAMs/{file,NW.*}.bam'
 	log: 'StrandS_BAMs/{file}.log'
 	shell: 'wget -O {output} -o {log} https://zenodo.org/record/583682/files/{wildcards.file}.bam'
+
+rule merge_strandseq_bams:
+	input: 
+		bams=expand('StrandS_BAMs/{bam}', bam=strandseq_bams),
+	output:
+		bam='StrandS_BAMs/NA12878_merged.bam',
+	shell:
+		'samtools merge {output.bam} {input.bams}'
+
 
 rule download_SS:
 	threads: 100
@@ -59,21 +68,28 @@ rule create_dummy_file:
 	output:'download/StrandS_suppData/TRIAL{trials,[0-9]+}_downsampled/WCregions/NA12878_WC_regions_hg19_0cellsSample',
 	shell: 'touch {output}'
 
-#TODO: I've started to edit this rule but did not finish yet
-#rule run_SS_pipeline:
-#	input: 
-#		strandseqbams=expand('StrandS_BAMs/{bam}', bam=strandseq_bams),
-#		dontknow='download/', 
-#		vcf='vcf/NA12878.benchmark.unphased.chr{chromosome,[0-9]+}.vcf',
-#		mergedbam='StrandS_BAMs/NA12878_merged.bam',
-#		wcregions='StrandS_suppData/TRIAL{trials}_downsampled/WCregions/NA12878_WC_regions_hg19_{strandseqcoverage}cellsSample',
-#		snppositions='StrandS_suppData/Platinum_NA12878_SNP_allChroms.txt',
-#	output:'StrandPhaseR_TRIAL_{trials,[0-9]+}_{strandseqcoverage,[0-9]+}cells/VCFfiles/chr{chromosome,[0-9]+}_phased.vcf', 
-#	run: 
-#		if wildcards.strandseqcoverage=='0':
-#			shell('awk \'($0 ~ /^#/)\' {input[2]} > {output}')
-#		else:
-#			shell('Rscript download/StrandS_suppData/StrandPhaseR_pipeline.R StrandS_BAMs/ {input.wccounts} {input.wcregions} {input.snppositions} {wildcards.chromosome} {strandphaser} {input[3]}')
+	
+rule install_strandphaser:
+	output: 'R-packages/StrandPhaseR/R/StrandPhaseR'
+	log: 'strandphaser-install.log'
+	shell: './install-strandphaser.R > {log} 2>&1'
+
+
+rule run_SS_pipeline:
+	input: 
+		strandseqbams=expand('StrandS_BAMs/{bam}', bam=strandseq_bams),
+		unphasedvcf='vcf/NA12878.benchmark.unphased.chr{chromosome,[0-9]+}.vcf',
+		mergedbam='StrandS_BAMs/NA12878_merged.bam',
+		wcregions='StrandS_suppData/TRIAL{trials}_downsampled/WCregions/NA12878_WC_regions_hg19_{strandseqcoverage}cellsSample',
+		snppositions='StrandS_suppData/Platinum_NA12878_SNP_allChroms.txt',
+		strandphaser='R-packages/StrandPhaseR/R/StrandPhaseR'
+	output:
+		vcf='StrandPhaseR_TRIAL_{trials,[0-9]+}_{strandseqcoverage,[0-9]+}cells/VCFfiles/chr{chromosome,[0-9]+}_phased.vcf', 
+	run: 
+		if wildcards.strandseqcoverage=='0':
+			shell('awk \'($0 ~ /^#/)\' {input.unphasedvcf} > {output.vcf}')
+		else:
+			shell('Rscript StrandS_suppData/StrandPhaseR_pipeline.R StrandS_BAMs/ StrandPhaseR_TRIAL_{wildcards.trials}_{wildcards.strandseqcoverage}cells {input.wcregions} {input.snppositions} {wildcards.chromosome} $PWD/R-packages/ {input.mergedbam}')
 
 # previous call:
 # Rscript
@@ -165,7 +181,7 @@ rule filter_10xG_vcf:
 
 rule unphase_vcfs:
 	input: 'vcf/NA12878.{data}.phased.chrall.vcf',
-	output: expand('vcf/NA12878.{data}.unphased.chrall.vcf', data=['benchamrk', '10xG'])
+	output: 'vcf/NA12878.{data}.unphased.chrall.vcf',
 	shell: '{whatshap} unphase {input} > {output}'
 
 rule split_vcf:
@@ -389,6 +405,16 @@ rule evaluate_whatshap_SS_only:
 	#log: 'vcf/platinum/NA12878.vcf.gz.wgetlog'
 	#resources: download=1
 	#shell: 'wget --output-file={log} --password "" -O {output} ftp://platgene_ro@ussd-ftp.illumina.com/2016-1.0/hg19/small_variants/NA12878/NA12878.vcf.gz'
+
+
+#rule extract_vcf_chromosome:
+	#input: 
+		#vcf='{file}.vcf.gz',
+		#tbi='{file}.vcf.gz.tbi',
+	#output:
+		#vcf='{file}.{chromsome}.vcf'
+	#log: '{file}.{chromsome}.vcf.log'
+	#shell: 'bcftools view {input.vcf} {wildcards.chromosome} > {output.vcf}'
 
 #rule vcf_sitesonly:
 	#input: 
