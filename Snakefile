@@ -54,9 +54,16 @@ rule download_strandseq_bams:
 	threads: 10
 	output: 'StrandS_BAMs/{file,NW.*}.bam'
 	log: 'StrandS_BAMs/{file}.log'
-	shell: 'wget -O {output} -o {log} https://zenodo.org/record/583682/files/{wildcards.file}.bam'
+	shell: 'wget -O {output} -o {log} https://zenodo.org/record/830278/files/{wildcards.file}.bam'
 
-# samtools merge give error, so I manually copied merged NA12878 from David.
+rule merge_strandseq_bams:
+	 input:
+		bams=expand('StrandS_BAMs/{bam}', bam=strandseq_bams),
+	output:
+		bam='StrandS_BAMs/NA12878_merged.bam',
+	shell:
+		'samtools merge {output.bam} {input.bams}'
+
 rule run_SS_pipeline:
 	input:
 		strandseqbams=expand('StrandS_BAMs/{bam}', bam=strandseq_bams),
@@ -68,7 +75,7 @@ rule run_SS_pipeline:
 		if wildcards.strandseqcoverage=='0':
 			shell('awk \'($0 ~ /^#/)\' {input.unphasedvcf} > {output.vcf}')
 		else:
-			shell('Rscript download_ss/StrandS_suppData/StrandPhaseR_pipeline.R StrandS_BAMs StrandPhaseR_TRIAL_{wildcards.trials}_{wildcards.strandseqcoverage}cells download_ss/StrandS_suppData/TRIAL{wildcards.trials}_downsampled/WCregions/NA12878_WC_regions_hg19_{wildcards.strandseqcoverage}cellsSample download_ss/StrandS_suppData/Platinum_NA12878_SNP_allChroms.txt {wildcards.chromosome} {strandphaser} StrandS_BAMs/NA12878_merged.bam')
+			shell('Rscript download_ss/StrandS_suppData/StrandPhaseR_pipeline.R StrandS_BAMs StrandPhaseR_TRIAL_{wildcards.trials}_{wildcards.strandseqcoverage}cells download_ss/StrandS_suppData/TRIAL{wildcards.trials}_downsampled/WCregions/NA12878_WC_regions_hg19_{wildcards.strandseqcoverage}cellsSample download_ss/StrandS_suppData/Platinum_NA12878_SNP_allChroms.txt {wildcards.chromosome} {strandphaser} {input.mergedbam}')
 
 rule download_pacbio:
 	threads: 100
