@@ -135,7 +135,6 @@ rule index_bams:
 	shell: 'samtools index {input}'
 
 rule consensus_VCFs:
-	threads: 100
 	output:
 		protected("download/NA12878.benchmark.phased.chrall.vcf.gz")
 	shell:
