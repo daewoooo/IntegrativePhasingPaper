@@ -78,14 +78,12 @@ rule run_SS_pipeline:
 			shell('Rscript download_ss/StrandS_suppData/StrandPhaseR_pipeline.R StrandS_BAMs StrandPhaseR_TRIAL_{wildcards.trials}_{wildcards.strandseqcoverage}cells download_ss/StrandS_suppData/TRIAL{wildcards.trials}_downsampled/WCregions/NA12878_WC_regions_hg19_{wildcards.strandseqcoverage}cellsSample download_ss/StrandS_suppData/Platinum_NA12878_SNP_allChroms.txt {wildcards.chromosome} {strandphaser} {input.mergedbam}')
 
 rule download_pacbio:
-	threads: 100
 	output:
 		protected("bam/NA12878.pacbio.chrall.covall.{ext,bam}")
 	shell:
 		"wget -O {output} ftp://ftp-trace.ncbi.nlm.nih.gov/giab/ftp/data/NA12878/NA12878_PacBio_MtSinai/sorted_final_merged.{wildcards.ext}"
 
 rule download_illumina:
-	threads: 100
 	output:
 		protected("download/NA12878.illumina.chrall.covall.{ext,bam}")
 	shell:
