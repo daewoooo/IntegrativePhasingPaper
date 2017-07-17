@@ -57,7 +57,7 @@ rule download_strandseq_bams:
 	shell: 'wget -O {output} -o {log} https://zenodo.org/record/830278/files/{wildcards.file}.bam'
 
 rule merge_strandseq_bams:
-	 input:
+	input:
 		bams=expand('StrandS_BAMs/{bam}', bam=strandseq_bams),
 	output:
 		bam='StrandS_BAMs/NA12878_merged.bam',
