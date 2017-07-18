@@ -55,19 +55,19 @@ rule install_strandphaser:
 
 rule run_SS_pipeline:
 	input: 
-		strandseqbams=expand('StrandS_BAMs/{bam}', bam=strandseq_bams),
+		strandseqbams=expand('StrandS_BAMs/per-cell/{{ssdownsampling}}/{bam}', bam=strandseq_bams),
 		unphasedvcf='vcf/NA12878.benchmark.unphased.chr{chromosome}.vcf',
-		mergedbam='StrandS_BAMs/NA12878_merged.bam',
+		mergedbam='StrandS_BAMs/merged/{ssdownsampling}/NA12878_merged.bam',
 		wcregions='StrandS_suppData/TRIAL{trials}_downsampled/WCregions/NA12878_WC_regions_hg19_{strandseqcoverage}cellsSample',
 		snppositions='StrandS_suppData/Platinum_NA12878_SNP_allChroms.txt',
 		strandphaser='R-packages/StrandPhaseR/R/StrandPhaseR'
 	output:
-		vcf='StrandPhaseR_TRIAL_{trials,[0-9]+}_{strandseqcoverage,[0-9]+}cells/VCFfiles/chr{chromosome,[0-9]+}_phased.vcf', 
+		vcf='StrandPhaseR_TRIAL_{trials,[0-9]+}_{strandseqcoverage,[0-9]+}cells_{ssdownsampling,(full|down[0-9]+)}/VCFfiles/chr{chromosome,[0-9]+}_phased.vcf', 
 	run: 
 		if wildcards.strandseqcoverage=='0':
 			shell('awk \'($0 ~ /^#/)\' {input.unphasedvcf} > {output.vcf}')
 		else:
-			shell('Rscript StrandS_suppData/StrandPhaseR_pipeline.R StrandS_BAMs/ StrandPhaseR_TRIAL_{wildcards.trials}_{wildcards.strandseqcoverage}cells {input.wcregions} {input.snppositions} {wildcards.chromosome} $PWD/R-packages/ {input.mergedbam}')
+			shell('Rscript StrandS_suppData/StrandPhaseR_pipeline.R StrandS_BAMs/per-cell/full StrandPhaseR_TRIAL_{wildcards.trials}_{wildcards.strandseqcoverage}cells_{wildcards.ssdownsampling} {input.wcregions} {input.snppositions} {wildcards.chromosome} $PWD/R-packages/ {input.mergedbam}')
 
 # previous call:
 # Rscript
@@ -81,16 +81,15 @@ rule run_SS_pipeline:
 # {input[3]}
 
 rule download_strandseq_bams:
-	threads: 10
-	output: 'StrandS_BAMs/{file,NW.*}.bam'
-	log: 'StrandS_BAMs/{file}.log'
+	output: 'StrandS_BAMs/per-cell/full/{file,NW.*}.bam'
+	log: 'StrandS_BAMs/per-cell/full/{file}.log'
 	shell: 'wget -O {output} -o {log} https://zenodo.org/record/830278/files/{wildcards.file}.bam'
 
 rule merge_strandseq_bams:
 	input:
-		bams=expand('StrandS_BAMs/{bam}', bam=strandseq_bams),
+		bams=expand('StrandS_BAMs/per-cell/{{ssdownsampling}}/{bam}', bam=strandseq_bams),
 	output:
-		bam='StrandS_BAMs/NA12878_merged.bam',
+		bam='StrandS_BAMs/merged/{ssdownsampling}/NA12878_merged.bam',
 	shell:
 		'samtools merge {output.bam} {input.bams}'
 
@@ -141,7 +140,7 @@ rule download_reference:
 rule update_ref:
 	input: 'reference/human_g1k_v37.fasta'
 	output: 'reference/human_g1k_v37.notation.fasta'
-	shell: 'sed -e \'s/>/>chr/g\' {input} > {output}'
+	shell: 'sed -r \'s/^>([^ \\t]+).*$/>chr\\1/g\' {input} > {output}'
 
 
 rule download_10xG_vcf:
@@ -256,7 +255,7 @@ rule integrative_whatshap_pacbio_SS:
 	input: 
 		bam1='bam/TRIAL-{trials}/NA12878.pacbio.chr{chromosome}.cov{pcoverage}.readgroup.sorted.bam',
 		vcf1='vcf/NA12878.benchmark.unphased.chr{chromosome}.vcf',
-		vcf2='StrandPhaseR_TRIAL_{trials}_{strandseqcoverage}cells/VCFfiles/chr{chromosome}_phased.vcf',
+		vcf2='StrandPhaseR_TRIAL_{trials}_{strandseqcoverage}cells_full/VCFfiles/chr{chromosome}_phased.vcf',
 		ref='reference/human_g1k_v37.notation.fasta',
 	output: 
 		vcf= 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio{pcoverage,(all|[0-9]+)}.illumina0.10x0.chr{chromosome,[0-9]+}.noindels.vcf',
@@ -268,7 +267,7 @@ rule integrative_whatshap_pacbio_SS_indels:
 	input: 
 		bam1='bam/TRIAL-{trials}/NA12878.pacbio.chr{chromosome}.cov{pcoverage}.readgroup.sorted.bam',
 		vcf1='vcf/NA12878.benchmark.unphased.chr{chromosome}.vcf',
-		vcf2='StrandPhaseR_TRIAL_{trials}_{strandseqcoverage}cells/VCFfiles/chr{chromosome}_phased.vcf',
+		vcf2='StrandPhaseR_TRIAL_{trials}_{strandseqcoverage}cells_full/VCFfiles/chr{chromosome}_phased.vcf',
 		ref='reference/human_g1k_v37.notation.fasta',
 	output: 
 		vcf= 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio{pcoverage,(all|[0-9]+)}.illumina0.10x0.chr{chromosome,[0-9]+}.indels.vcf',
@@ -280,7 +279,7 @@ rule integrative_whatshap_illumina_SS:
 	input: 
 		bam1='bam/TRIAL-{trials}/NA12878.illumina.chr{chromosome}.cov{icoverage}.readgroup.sorted.bam',
 		vcf1='vcf/NA12878.benchmark.unphased.chr{chromosome}.vcf',
-		vcf2='StrandPhaseR_TRIAL_{trials}_{strandseqcoverage}cells/VCFfiles/chr{chromosome}_phased.vcf',
+		vcf2='StrandPhaseR_TRIAL_{trials}_{strandseqcoverage}cells_full/VCFfiles/chr{chromosome}_phased.vcf',
 		ref='reference/human_g1k_v37.notation.fasta',
 	output: 
 		vcf= 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio0.illumina{icoverage,(all|[0-9]+)}.10x0.chr{chromosome,[0-9]+}.noindels.vcf',
@@ -315,7 +314,7 @@ rule integrative_whatshap_SS_xg:
 	input: 
 		vcf3='vcf/NA12878.10xG.phased.chr{chromosome}.vcf',
 		vcf1='vcf/NA12878.benchmark.unphased.chr{chromosome}.vcf',
-		vcf2='StrandPhaseR_TRIAL_{trials}_{strandseqcoverage}cells/VCFfiles/chr{chromosome}_phased.vcf',
+		vcf2='StrandPhaseR_TRIAL_{trials}_{strandseqcoverage}cells_full/VCFfiles/chr{chromosome}_phased.vcf',
 	output: 
 		vcf= 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio0.illumina0.10x{xcoverage,(all|[0-9]+)}.chr{chromosome,[0-9]+}.noindels.vcf',
 	log: 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio0.illumina0.10x{xcoverage,(all|[0-9]+)}.chr{chromosome,[0-9]+}.noindels.vcf.log'
@@ -348,7 +347,7 @@ rule merge_vcfs_pacbio_only:
 
 # bcftools error: The sequence "chr2" not defined in the header of StrandSeq VCF files. Not running evaluation for it.
 rule merge_vcfs_SS_only:
-	input: expand('StrandPhaseR_TRIAL_{trials}_{strandseqcoverage}cells/VCFfiles/chr{chromosome}_phased.vcf', trials=trials, strandseqcoverage=strandseqcoverage, chromosome=chromosome)
+	input: expand('StrandPhaseR_TRIAL_{trials}_{strandseqcoverage}cells_full/VCFfiles/chr{chromosome}_phased.vcf', trials=trials, strandseqcoverage=strandseqcoverage, chromosome=chromosome)
 	output: 'StrandPhaseR_TRIAL_{trials,[0-9]+}_{strandseqcoverage,[0-9]+}cells/VCFfiles/chrall_phased.vcf'
 	shell: '(bcftools concat {input} | vcf-sort > {output[0]})'
 
@@ -388,7 +387,7 @@ rule evaluate_whatshap_10xg_only:
 rule evaluate_whatshap_SS_only:
 	input:
 		truth='vcf/NA12878.benchmark.phased.chrall.vcf',
-		phased='StrandPhaseR_TRIAL_{trials}_{strandseqcoverage}cells/VCFfiles/chrall_phased.vcf',
+		phased='StrandPhaseR_TRIAL_{trials}_{strandseqcoverage}cells_full/VCFfiles/chrall_phased.vcf',
 	output:	'eval/whatshap_SS_only/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio0.illumina0.10x0.chrall.noindels.eval',
 	log: 'eval/whatshap_SS_only/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio0.illumina0.10x0.chrall.noindels.log',
 	#shell: 'whatshap compare --names benchmark,whatshap --only-snvs --tsv-pairwise {output} {input.truth} {input.phased} > {log} 2>&1'
