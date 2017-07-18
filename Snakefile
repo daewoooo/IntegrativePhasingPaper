@@ -26,8 +26,10 @@ strandseq_bams = ['NW130711_291.bam','NW130711_293.bam','NW130711_295.bam','NW13
 
 
 # parameters
-coverage = [2]
+#coverage = [2,3,4,5,10,15,25,30,'all']
+coverage = ['all']
 chromosome = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22]
+#strandseqcoverage= [5,10,20,40,60,80,100,120,134]
 strandseqcoverage= [134]
 trials=[3]
 
@@ -36,11 +38,6 @@ rule master:
 	input: 'summary.eval'
 	message: 'MASTER rule'
 
-
-rule download_SS:
-	output: 'download_ss/'
-	run:
-		shell("git clone https://github.com/daewoooo/IntegrativePhasingPaper.git {output}")
 
 rule create_dummy_file:
 	output:'download_ss/StrandS_suppData/TRIAL{trials,[0-9]+}_downsampled/WCregions/NA12878_WC_regions_hg19_0cellsSample',
@@ -83,6 +80,7 @@ rule run_SS_pipeline:
 rule download_strandseq_bams:
 	output: 'StrandS_BAMs/per-cell/full/{file,NW.*}.bam'
 	log: 'StrandS_BAMs/per-cell/full/{file}.log'
+	resources: download=1
 	shell: 'wget -O {output} -o {log} https://zenodo.org/record/830278/files/{wildcards.file}.bam'
 
 rule merge_strandseq_bams:
@@ -110,26 +108,34 @@ rule merge_strandseq_bams:
 rule download_pacbio:
 	output:
 		protected("bam/NA12878.pacbio.chrall.covall.{ext,bam}")
+	resources: download=1
 	shell:
 		"wget -O {output} ftp://ftp-trace.ncbi.nlm.nih.gov/giab/ftp/data/NA12878/NA12878_PacBio_MtSinai/sorted_final_merged.{wildcards.ext}"
 
 rule download_illumina:
 	output:
 		protected("download/NA12878.illumina.chrall.covall.{ext,bam}")
+	resources: download=1
 	shell:
 		"wget -O {output} ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/phase3/data/NA12878/high_coverage_alignment/NA12878.mapped.ILLUMINA.bwa.CEU.high_coverage_pcr_free.20130906.{wildcards.ext}"
 
-rule index_illumina:
-	input: 'download/NA12878.illumina.chrall.covall.bam'
-	output: 'download/NA12878.illumina.chrall.covall.bam.bai'
+rule index_bam:
+	input: '{file}.bam'
+	output: '{file}.bam.bai'
 	shell: 'samtools index {input}'
+
+rule index_fasta:
+	input: '{file}.fasta'
+	output: '{file}.fasta.fai'
+	shell: 'samtools faidx {input}'
 
 rule download_reference:
 	output:
 		'reference/human_g1k_v37.fasta'
+	resources: download=1
 	shell:
 		"""
-		wget -O {output}.gz.incomplete ftp://ftp.ncbi.nlm.nih.gov/1000genomes/ftp/technical/reference/human_g1k_v37.fasta.gz
+		wget -q -O {output}.gz.incomplete ftp://ftp.ncbi.nlm.nih.gov/1000genomes/ftp/technical/reference/human_g1k_v37.fasta.gz
 		mv {output}.gz.incomplete {output}.gz
 		# gunzip fails with "decompression OK, trailing garbage ignored" because
 		# the file is razf-compressed (gzip-compatible, but with an index at end)
@@ -146,23 +152,19 @@ rule update_ref:
 rule download_10xG_vcf:
 	output: 
 		protected("download/NA12878.10xG.phased.chrall.vcf.gz")
+	resources: download=1
 	shell:
 		"wget -O {output} https://s3-us-west-2.amazonaws.com/10x.files/samples/genome/NA12878_WGS_210/NA12878_WGS_210_phased_variants.vcf.gz"
 
 rule reheader_illumina:
-	input:'download/NA12878.illumina.chrall.covall.bam', 'download/NA12878.illumina.chrall.covall.bam.bai'
+	input:'download/NA12878.illumina.chrall.covall.bam',
 	output: 'bam/NA12878.illumina.chrall.reheader.covall.sam'
-	shell: "samtools view -h {input} | sed -e \'/^@SQ/s/SN:/SN:chr/\' -e \'/^\[^@\]/s/\t/\tchr/2\'  > {output}"
+	shell: "samtools view -H {input} | sed -e \'/^@SQ/s/SN:/SN:chr/\' -e \'/^\[^@\]/s/\t/\tchr/2\'  > {output}"
 
 rule filter_illumina:
 	input:'download/NA12878.illumina.chrall.covall.bam', 'download/NA12878.illumina.chrall.covall.bam.bai', 'bam/NA12878.illumina.chrall.reheader.covall.sam'
-	output:'bam/NA12878.illumina.chrall.covall.bam'
+	output: 'bam/NA12878.illumina.chrall.covall.bam'
 	shell: 'samtools reheader {input[2]} {input[0]} > {output}'
-
-rule index_bams:
-	input:'bam/NA12878.{data}.chrall.covall.bam'
-	output: 'bam/NA12878.{data, (illumina|pacbio|10xG)}.chrall.covall.bam.bai'
-	shell: 'samtools index {input}'
 
 rule consensus_VCFs:
 	output:
@@ -196,7 +198,7 @@ rule extract_chromosome:
 		bam='bam/NA12878.{data}.chrall.covall.bam',
 		bai='bam/NA12878.{data}.chrall.covall.bam.bai'
 	output:
-		bam='bam/NA12878.{data, (illumina|pacbio|10xG)}.chr{chromosome,[0-9]+}.covall.bam'
+		bam=temp('bam/NA12878.{data, (illumina|pacbio|10xG)}.chr{chromosome,[0-9]+}.covall.bam')
 	log: 'bam/NA12878.{data, (illumina|pacbio|10xG)}.chr{chromosome,[0-9]+}.covall.bam.log'
 	shell: '(samtools view -h {input.bam} chr{wildcards.chromosome} | samtools view -Sb - > {output.bam}) 2>{log}'
 
@@ -220,8 +222,8 @@ rule downsampling:
 		bam='bam/NA12878.{data}.chr{chromosome}.covall.bam',
 		coverage='bam/stats/NA12878.{data}.chr{chromosome}.covall.bam.coverage'
 	output: 
-		bam='bam/TRIAL-{trials,[0-9]+}/NA12878.{data, (illumina|pacbio|10xG)}.chr{chromosome,[0-9]+}.cov{coverage,(all|[0-9]+)}.bam',
-		bai='bam/TRIAL-{trials,[0-9]+}/NA12878.{data, (illumina|pacbio|10xG)}.chr{chromosome,[0-9]+}.cov{coverage,(all|[0-9]+)}.bai'
+		bam=temp('bam/TRIAL-{trials,[0-9]+}/NA12878.{data, (illumina|pacbio|10xG)}.chr{chromosome,[0-9]+}.cov{coverage,(all|[0-9]+)}.bam'),
+		bai=temp('bam/TRIAL-{trials,[0-9]+}/NA12878.{data, (illumina|pacbio|10xG)}.chr{chromosome,[0-9]+}.cov{coverage,(all|[0-9]+)}.bai')
 	log: 'bam/TRIAL-{trials,[0-9]+}/NA12878.{data, (illumina|pacbio|10xG)}.chr{chromosome,[0-9]+}.cov{coverage,(all|[0-9]+)}.bam.log'
 	message: 'Downsampling {input} to {wildcards.coverage}x'
 	run:
@@ -254,9 +256,11 @@ rule sort_bams:
 rule integrative_whatshap_pacbio_SS:
 	input: 
 		bam1='bam/TRIAL-{trials}/NA12878.pacbio.chr{chromosome}.cov{pcoverage}.readgroup.sorted.bam',
+		bai1='bam/TRIAL-{trials}/NA12878.pacbio.chr{chromosome}.cov{pcoverage}.readgroup.sorted.bam.bai',
 		vcf1='vcf/NA12878.benchmark.unphased.chr{chromosome}.vcf',
 		vcf2='StrandPhaseR_TRIAL_{trials}_{strandseqcoverage}cells_full/VCFfiles/chr{chromosome}_phased.vcf',
 		ref='reference/human_g1k_v37.notation.fasta',
+		reffai='reference/human_g1k_v37.notation.fasta.fai',
 	output: 
 		vcf= 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio{pcoverage,(all|[0-9]+)}.illumina0.10x0.chr{chromosome,[0-9]+}.noindels.vcf',
 	log: 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio{pcoverage,(all|[0-9]+)}.illumina0.10x0.chr{chromosome,[0-9]+}.noindels.vcf.log'
@@ -266,9 +270,11 @@ rule integrative_whatshap_pacbio_SS:
 rule integrative_whatshap_pacbio_SS_indels:
 	input: 
 		bam1='bam/TRIAL-{trials}/NA12878.pacbio.chr{chromosome}.cov{pcoverage}.readgroup.sorted.bam',
+		bai1='bam/TRIAL-{trials}/NA12878.pacbio.chr{chromosome}.cov{pcoverage}.readgroup.sorted.bam.bai',
 		vcf1='vcf/NA12878.benchmark.unphased.chr{chromosome}.vcf',
 		vcf2='StrandPhaseR_TRIAL_{trials}_{strandseqcoverage}cells_full/VCFfiles/chr{chromosome}_phased.vcf',
 		ref='reference/human_g1k_v37.notation.fasta',
+		reffai='reference/human_g1k_v37.notation.fasta.fai',
 	output: 
 		vcf= 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio{pcoverage,(all|[0-9]+)}.illumina0.10x0.chr{chromosome,[0-9]+}.indels.vcf',
 	log: 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio{pcoverage,(all|[0-9]+)}.illumina0.10x0.chr{chromosome,[0-9]+}.indels.vcf.log'
@@ -278,9 +284,11 @@ rule integrative_whatshap_pacbio_SS_indels:
 rule integrative_whatshap_illumina_SS:
 	input: 
 		bam1='bam/TRIAL-{trials}/NA12878.illumina.chr{chromosome}.cov{icoverage}.readgroup.sorted.bam',
+		bai1='bam/TRIAL-{trials}/NA12878.illumina.chr{chromosome}.cov{icoverage}.readgroup.sorted.bam.bai',
 		vcf1='vcf/NA12878.benchmark.unphased.chr{chromosome}.vcf',
 		vcf2='StrandPhaseR_TRIAL_{trials}_{strandseqcoverage}cells_full/VCFfiles/chr{chromosome}_phased.vcf',
 		ref='reference/human_g1k_v37.notation.fasta',
+		reffai='reference/human_g1k_v37.notation.fasta.fai',
 	output: 
 		vcf= 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio0.illumina{icoverage,(all|[0-9]+)}.10x0.chr{chromosome,[0-9]+}.noindels.vcf',
 	log: 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio0.illumina{icoverage,(all|[0-9]+)}.10x0.chr{chromosome,[0-9]+}.noindels.vcf.log'
@@ -290,9 +298,11 @@ rule integrative_whatshap_illumina_SS:
 rule integrative_whatshap_pacbio_xg:
 	input: 
 		bam1='bam/TRIAL-{trials}/NA12878.pacbio.chr{chromosome}.cov{pcoverage}.readgroup.sorted.bam',
+		bai1='bam/TRIAL-{trials}/NA12878.pacbio.chr{chromosome}.cov{pcoverage}.readgroup.sorted.bai',
 		vcf1='vcf/NA12878.benchmark.unphased.chr{chromosome}.vcf',
 		vcf2='vcf/NA12878.10xG.phased.chr{chromosome}.vcf',
 		ref='reference/human_g1k_v37.notation.fasta',
+		reffai='reference/human_g1k_v37.notation.fasta.fai',
 	output: 
 		vcf= 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells0.pacbio{pcoverage,(all|[0-9]+)}.illumina0.10x{xcoverage,(all|[0-9]+)}.chr{chromosome,[0-9]+}.noindels.vcf',
 	log: 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells0.pacbio{pcoverage,(all|[0-9]+)}.illumina0.10x{xcoverage,(all|[0-9]+)}.chr{chromosome,[0-9]+}.noindels.vcf.log'
@@ -302,8 +312,10 @@ rule integrative_whatshap_pacbio_xg:
 rule integrative_whatshap_pacbio_only:
 	input: 
 		bam1='bam/TRIAL-{trials}/NA12878.pacbio.chr{chromosome}.cov{pcoverage}.readgroup.sorted.bam',
+		bai1='bam/TRIAL-{trials}/NA12878.pacbio.chr{chromosome}.cov{pcoverage}.readgroup.sorted.bam.bai',
 		vcf1='vcf/NA12878.benchmark.unphased.chr{chromosome}.vcf',
 		ref='reference/human_g1k_v37.notation.fasta',
+		reffai='reference/human_g1k_v37.notation.fasta.fai',
 	output: 
 		vcf= 'whatshap_pacbio_only/TRIAL-{trials,[0-9]+}/strandseqcells0.pacbio{pcoverage,(all|[0-9]+)}.illumina0.10x0.chr{chromosome,[0-9]+}.noindels.vcf',
 	log: 'whatshap_pacbio_only/TRIAL-{trials,[0-9]+}/strandseqcells0.pacbio{pcoverage,(all|[0-9]+)}.illumina0.10x0.chr{chromosome,[0-9]+}.noindels.vcf.log'
