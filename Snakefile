@@ -1,5 +1,6 @@
 import pysam
 from os.path import splitext
+import os
 
 """
 R shell command to install StrandPhaseR: 
@@ -26,16 +27,21 @@ strandseq_bams = ['NW130711_291.bam','NW130711_293.bam','NW130711_295.bam','NW13
 
 
 # parameters
+
 #coverage = [2,3,4,5,10,15,25,30,'all']
 coverage = ['all']
-chromosome = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22]
+#chromosome = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22]
+chromosome = [1]
 #strandseqcoverage= [5,10,20,40,60,80,100,120,134]
 strandseqcoverage= [134]
+#trials=[1,2,3,4,5]
 trials=[3]
 
 
 rule master:
-	input: 'summary.eval'
+	input: 
+		'summary.eval',
+		#expand('ssdownsampling/vcf/TRIAL-3/strandseqcells{strandseqcoverage}_{ssdownsampling}.pacbioall.illumina0.10x0.chr1.noindels.vcf', strandseqcoverage=[5,10,20,40,60,80,100,120,134], ssdownsampling=['down05','down10','down20','down50','down75','full']),
 	message: 'MASTER rule'
 
 
@@ -60,22 +66,14 @@ rule run_SS_pipeline:
 		strandphaser='R-packages/StrandPhaseR/R/StrandPhaseR'
 	output:
 		vcf='StrandPhaseR_TRIAL_{trials,[0-9]+}_{strandseqcoverage,[0-9]+}cells_{ssdownsampling,(full|down[0-9]+)}/VCFfiles/chr{chromosome,[0-9]+}_phased.vcf', 
+	log:
+		'StrandPhaseR_TRIAL_{trials,[0-9]+}_{strandseqcoverage,[0-9]+}cells_{ssdownsampling,(full|down[0-9]+)}/VCFfiles/chr{chromosome,[0-9]+}_phased.vcf.log'
 	run: 
 		if wildcards.strandseqcoverage=='0':
 			shell('awk \'($0 ~ /^#/)\' {input.unphasedvcf} > {output.vcf}')
 		else:
-			shell('Rscript StrandS_suppData/StrandPhaseR_pipeline.R StrandS_BAMs/per-cell/full StrandPhaseR_TRIAL_{wildcards.trials}_{wildcards.strandseqcoverage}cells_{wildcards.ssdownsampling} {input.wcregions} {input.snppositions} {wildcards.chromosome} $PWD/R-packages/ {input.mergedbam}')
-
-# previous call:
-# Rscript
-# download/StrandS_suppData/StrandPhaseR_pipeline.R
-# {input[0]}                  = 'StrandS_BAMs'
-# StrandPhaseR_TRIAL_{wildcards.trials}_{wildcards.strandseqcoverage}cells
-# download/StrandS_suppData/TRIAL{wildcards.trials}_downsampled/WCregions/NA12878_WC_regions_hg19_{wildcards.strandseqcoverage}cellsSample
-# download/StrandS_suppData/Platinum_NA12878_SNP_allChroms.txt
-# {wildcards.chromosome}
-# {strandphaser}
-# {input[3]}
+			cwd = os.getcwd()
+			shell('Rscript StrandS_suppData/StrandPhaseR_pipeline.R StrandS_BAMs/per-cell/{wildcards.ssdownsampling} StrandPhaseR_TRIAL_{wildcards.trials}_{wildcards.strandseqcoverage}cells_{wildcards.ssdownsampling} {input.wcregions} {input.snppositions} {wildcards.chromosome} {cwd}/R-packages/ {input.mergedbam} > {log} 2>&1')
 
 rule download_strandseq_bams:
 	output: 'StrandS_BAMs/per-cell/full/{file,NW.*}.bam'
@@ -90,20 +88,6 @@ rule merge_strandseq_bams:
 		bam='StrandS_BAMs/merged/{ssdownsampling}/NA12878_merged.bam',
 	shell:
 		'samtools merge {output.bam} {input.bams}'
-
-#rule run_SS_pipeline:
-#	input:
-#		strandseqbams=expand('StrandS_BAMs/{bam}', bam=strandseq_bams),
-#		dontknow= 'download_ss/',
-#		mergedbam='StrandS_BAMs/NA12878_merged.bam',
-#	output:
-#		vcf='StrandPhaseR_TRIAL_{trials,[0-9]+}_{strandseqcoverage,[0-9]+}cells/VCFfiles/chr{chromosome,[0-9]+}_phased.vcf', 
-#	run:
-#		if wildcards.strandseqcoverage=='0':
-#			shell('awk \'($0 ~ /^#/)\' {input.unphasedvcf} > {output.vcf}')
-#		else:
-#			shell('Rscript download_ss/StrandS_suppData/StrandPhaseR_pipeline.R StrandS_BAMs StrandPhaseR_TRIAL_{wildcards.trials}_{wildcards.strandseqcoverage}cells download_ss/StrandS_suppData/TRIAL{wildcards.trials}_downsampled/WCregions/NA12878_WC_regions_hg19_{wildcards.strandseqcoverage}cellsSample download_ss/StrandS_suppData/Platinum_NA12878_SNP_allChroms.txt {wildcards.chromosome} {strandphaser} {input.mergedbam}')
-
 
 rule download_pacbio:
 	output:
@@ -198,7 +182,7 @@ rule extract_chromosome:
 		bam='bam/NA12878.{data}.chrall.covall.bam',
 		bai='bam/NA12878.{data}.chrall.covall.bam.bai'
 	output:
-		bam=temp('bam/NA12878.{data, (illumina|pacbio|10xG)}.chr{chromosome,[0-9]+}.covall.bam')
+		bam='bam/NA12878.{data, (illumina|pacbio|10xG)}.chr{chromosome,[0-9]+}.covall.bam'
 	log: 'bam/NA12878.{data, (illumina|pacbio|10xG)}.chr{chromosome,[0-9]+}.covall.bam.log'
 	shell: '(samtools view -h {input.bam} chr{wildcards.chromosome} | samtools view -Sb - > {output.bam}) 2>{log}'
 
@@ -217,14 +201,26 @@ rule calculate_coverage:
 		assert length != None
 		shell("samtools depth {input} | awk '{{sum+=$3}} END {{ print sum/{length} }}' > {output}")
 
+rule downsample_strandseq:
+	input:
+		bam='StrandS_BAMs/per-cell/full/{file}.bam',
+	output:
+		bam='StrandS_BAMs/per-cell/down{p}/{file}.bam',
+		#bai='StrandS_BAMs/per-cell/down{p}/{file}.bai',
+	log: 'StrandS_BAMs/per-cell/down{p}/{file}.bam.log'
+	run:
+		seed = abs(hash(output.bam)) % 2000000000
+		shell('picard DownsampleSam INPUT={input.bam} RANDOM_SEED={seed} CREATE_INDEX=true OUTPUT={output.bam} PROBABILITY=0.{wildcards.p} VALIDATION_STRINGENCY=SILENT > {log} 2>&1')
+
+
 rule downsampling:
 	input:
 		bam='bam/NA12878.{data}.chr{chromosome}.covall.bam',
 		coverage='bam/stats/NA12878.{data}.chr{chromosome}.covall.bam.coverage'
 	output: 
-		bam=temp('bam/TRIAL-{trials,[0-9]+}/NA12878.{data, (illumina|pacbio|10xG)}.chr{chromosome,[0-9]+}.cov{coverage,(all|[0-9]+)}.bam'),
-		bai=temp('bam/TRIAL-{trials,[0-9]+}/NA12878.{data, (illumina|pacbio|10xG)}.chr{chromosome,[0-9]+}.cov{coverage,(all|[0-9]+)}.bai')
-	log: 'bam/TRIAL-{trials,[0-9]+}/NA12878.{data, (illumina|pacbio|10xG)}.chr{chromosome,[0-9]+}.cov{coverage,(all|[0-9]+)}.bam.log'
+		bam=temp('bam/TRIAL-{trials,[0-9]+}/NA12878.{data, (illumina|pacbio|10xG)}.chr{chromosome,[0-9]+}.cov{coverage,([0-9]+)}.bam'),
+		bai=temp('bam/TRIAL-{trials,[0-9]+}/NA12878.{data, (illumina|pacbio|10xG)}.chr{chromosome,[0-9]+}.cov{coverage,([0-9]+)}.bai')
+	log: 'bam/TRIAL-{trials,[0-9]+}/NA12878.{data, (illumina|pacbio|10xG)}.chr{chromosome,[0-9]+}.cov{coverage,([0-9]+)}.bam.log'
 	message: 'Downsampling {input} to {wildcards.coverage}x'
 	run:
 		input_coverage = float(open(input.coverage).readline())
@@ -233,6 +229,21 @@ rule downsampling:
 			p = float(wildcards.coverage) / input_coverage
 		seed = hash(output)
 		shell('picard DownsampleSam INPUT={input.bam} RANDOM_SEED=null CREATE_INDEX=true OUTPUT={output.bam} PROBABILITY= {p} VALIDATION_STRINGENCY=SILENT > {log} 2>&1')
+
+rule downsampling_link:
+	input:
+		bam='bam/NA12878.{data}.chr{chromosome}.covall.bam',
+		bai='bam/NA12878.{data}.chr{chromosome}.covall.bam.bai'
+	output: 
+		bam=temp('bam/TRIAL-{trials,[0-9]+}/NA12878.{data, (illumina|pacbio|10xG)}.chr{chromosome,[0-9]+}.covall.bam'),
+		bai=temp('bam/TRIAL-{trials,[0-9]+}/NA12878.{data, (illumina|pacbio|10xG)}.chr{chromosome,[0-9]+}.covall.bai')
+	shell: 
+		'''
+		cd bam/TRIAL-{wildcards.trials} ; 
+		ln -s ../../{input.bam} NA12878.{wildcards.data}.chr{wildcards.chromosome}.covall.bam ; 
+		ln -s ../../{input.bai} NA12878.{wildcards.data}.chr{wildcards.chromosome}.covall.bai ; 
+		cd ..
+		'''
 
 rule add_read_groups:
 	input: 'bam/TRIAL-{trials}/NA12878.{data}.chr{chromosome}.cov{coverage}.bam'
@@ -249,7 +260,7 @@ rule sort_bams:
 	output: 'bam/TRIAL-{trials,[0-9]+}/NA12878.{data, (illumina|pacbio|10xG)}.chr{chromosome,[0-9]+}.cov{coverage,(all|[0-9]+)}.readgroup.sorted.bam', 'bam/TRIAL-{trials,[0-9]+}/NA12878.{data, (illumina|pacbio|10xG)}.chr{chromosome,[0-9]+}.cov{coverage,(all|[0-9]+)}.readgroup.sorted.bai', 'bam/TRIAL-{trials,[0-9]+}/NA12878.{data, (illumina|pacbio|10xG)}.chr{chromosome,[0-9]+}.cov{coverage,(all|[0-9]+)}.readgroup.sorted.bam.md5'
 	log: 'bam/TRIAL-{trials,[0-9]+}/NA12878.{data, (illumina|pacbio|10xG)}.chr{chromosome,[0-9]+}.cov{coverage,(all|[0-9]+)}.readgroup.sorted.bam.log'
 	message: 'Sorting {input}'
-	shell: 'time (picard SortSam VALIDATION_STRINGENCY=LENIENT MAX_RECORDS_IN_RAM=50000 SORT_ORDER=coordinate CREATE_INDEX=true CREATE_MD5_FILE=true I={input[0]} O={output[0]}) > {log} 2>&1'
+	shell: 'time (picard -Xmx16g SortSam VALIDATION_STRINGENCY=LENIENT MAX_RECORDS_IN_RAM=50000 SORT_ORDER=coordinate CREATE_INDEX=true CREATE_MD5_FILE=true I={input[0]} O={output[0]}) > {log} 2>&1'
 
 
 # run different combinations
@@ -265,6 +276,19 @@ rule integrative_whatshap_pacbio_SS:
 		vcf= 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio{pcoverage,(all|[0-9]+)}.illumina0.10x0.chr{chromosome,[0-9]+}.noindels.vcf',
 	log: 'whatshap_integrative_phasing/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}.pacbio{pcoverage,(all|[0-9]+)}.illumina0.10x0.chr{chromosome,[0-9]+}.noindels.vcf.log'
 	message: 'Running WHATSHAP on {input.bam1}'
+	shell: 'whatshap phase --max-coverage 15 --distrust-genotypes --sample NA12878 --chromosome chr{wildcards.chromosome} --reference {input.ref} {input.vcf1} {input.vcf2} {input.bam1} --output {output.vcf} 2> {log}'
+
+rule integrative_whatshap_pacbio_SSdownsampled:
+	input: 
+		bam1='bam/TRIAL-{trials}/NA12878.pacbio.chr{chromosome}.cov{pcoverage}.readgroup.sorted.bam',
+		bai1='bam/TRIAL-{trials}/NA12878.pacbio.chr{chromosome}.cov{pcoverage}.readgroup.sorted.bam.bai',
+		vcf1='vcf/NA12878.benchmark.unphased.chr{chromosome}.vcf',
+		vcf2='StrandPhaseR_TRIAL_{trials}_{strandseqcoverage}cells_{ssdownsampling}/VCFfiles/chr{chromosome}_phased.vcf',
+		ref='reference/human_g1k_v37.notation.fasta',
+		reffai='reference/human_g1k_v37.notation.fasta.fai',
+	output: 
+		vcf='ssdownsampling/vcf/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}_{ssdownsampling,(full|down[0-9]+)}.pacbio{pcoverage,(all|[0-9]+)}.illumina0.10x0.chr{chromosome,[0-9]+}.noindels.vcf',
+	log: 'ssdownsampling/vcf/TRIAL-{trials,[0-9]+}/strandseqcells{strandseqcoverage,[0-9]+}_{ssdownsampling,(full|down[0-9]+)}.pacbio{pcoverage,(all|[0-9]+)}.illumina0.10x0.chr{chromosome,[0-9]+}.noindels.vcf.log'
 	shell: 'whatshap phase --max-coverage 15 --distrust-genotypes --sample NA12878 --chromosome chr{wildcards.chromosome} --reference {input.ref} {input.vcf1} {input.vcf2} {input.bam1} --output {output.vcf} 2> {log}'
 
 rule integrative_whatshap_pacbio_SS_indels:
@@ -418,6 +442,9 @@ rule summary:
 		#expand('eval/whatshap_SS_only/TRIAL-{trials}/strandseqcells{strandseqcoverage}.pacbio0.illumina0.10x0.chrall.noindels.eval', trials=trials, strandseqcoverage=strandseqcoverage),
 	message: 'Aggregating statistics to {output}'
 	run:
-		first = input[0]
-		rest = ' '.join(input[1:]) 
-		shell('(cat {first} && ( cat {rest} | grep -v \'^#\' ) ) > {output}')
+		if len(input) == 1:
+			shell('cp {input} {output}')
+		else:
+			first = input[0]
+			rest = ' '.join(input[1:]) 
+			shell('(cat {first} && ( cat {rest} | grep -v \'^#\' ) ) > {output}')

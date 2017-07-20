@@ -12,3 +12,15 @@ snakemake --resources download=8 -j 40
 
 This command will run the full pipeline using 40 threads and at most 8 downloads at a time.
 
+Note that we ran a lot of different combinations of parameters for our paper. Please edit the first few lines of the Snakefile according to how many experiments you want to run. Here's the corresponding snippet:
+
+```
+#coverage = [2,3,4,5,10,15,25,30,'all']
+coverage = ['all']
+#chromosome = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22]
+chromosome = [1]
+#strandseqcoverage = [5,10,20,40,60,80,100,120,134]
+strandseqcoverage = [134]
+#trials = [1,2,3,4,5]
+trials = [3]
+```
